@@ -14,6 +14,9 @@ import {
   Line,
   Legend,
   ReferenceLine,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from 'recharts';
 import { 
   BarChart3, 
@@ -31,15 +34,54 @@ import {
 
 import type { ElectionRecord, RegionalRecord } from '../types/election';
 
+interface RecountSummary {
+  candidateRatios: { name: string; party: string; r1: number; r2: number; k: number }[];
+  provinceRows: {
+    province: string;
+    r1: number[];
+    r2: number[];
+    k: number[];
+    k_lee: number;
+    r1_lee: number;
+    r2_lee: number;
+  }[];
+  districtRows: {
+    province: string;
+    district: string;
+    lee_k: number;
+    lee_r1: number;
+    lee_r2: number;
+    kmx_k: number;
+    kmx_r1: number;
+    kmx_r2: number;
+  }[];
+  national: { r1: number[]; r2: number[]; k: number[] };
+}
+
 interface Props {
   electionData: ElectionRecord[];
   regionalData: Record<string, RegionalRecord>;
   recountData?: any[];
+  recountSummary?: RecountSummary;
   reports: {
     analysis: string;
     excelAudit: string;
     presentationAudit: string;
   };
+}
+
+const CANDIDATE_COLORS: Record<string, string> = {
+  '이재명': '#3b82f6',
+  '김문수': '#f43f5e',
+  '이준석': '#f97316',
+  '권영국': '#eab308',
+  '송진호': '#a855f7',
+};
+
+function kColor(k: number): string {
+  if (k >= 1.5) return '#f43f5e';
+  if (k > 1) return '#eab308';
+  return '#10b981';
 }
 
 type View = 'insight' | 'report' | 'audit' | 'recount';
@@ -91,7 +133,7 @@ const ELECTION_LABELS: Record<string, string> = {
 
 const ELECTIONS = ['18th', '19th', '20th', '21st'] as const;
 
-export default function ElectionDashboard({ electionData, regionalData, reports, recountData }: Props) {
+export default function ElectionDashboard({ electionData, regionalData, reports, recountData, recountSummary }: Props) {
   const [view, setView] = useState<View>('insight');
   const [selectedElection, setSelectedElection] = useState<(typeof ELECTIONS)[number]>('21st');
 
@@ -360,6 +402,194 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
         {/* Recount View */}
         {view === 'recount' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* National KPI Row */}
+            {recountSummary && (
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                {[
+                  { label: '분석 구시군 수', value: recountSummary.districtRows.length.toLocaleString(), sub: '253 districts' },
+                  { label: '이재명 전국 K값', value: recountSummary.candidateRatios[0].k.toFixed(4), sub: `R1 ${recountSummary.candidateRatios[0].r1}% → R2 ${recountSummary.candidateRatios[0].r2}%` },
+                  { label: 'K ≥ 1.5 구시군', value: recountSummary.districtRows.filter(d => d.lee_k >= 1.5).length.toString(), sub: '고위험 (High risk)' },
+                  { label: '최대 K값', value: Math.max(...recountSummary.districtRows.map(d => d.lee_k)).toFixed(4), sub: recountSummary.districtRows[0].district },
+                ].map((kpi, i) => (
+                  <div key={i} className="rounded-3xl border border-white/5 bg-slate-900/40 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{kpi.label}</p>
+                    <p className="mt-2 text-2xl font-bold text-white">{kpi.value}</p>
+                    <p className="mt-1 text-xs text-slate-500">{kpi.sub}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Chart Row 1: Candidate Ratios + Regional K */}
+            {recountSummary && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-white">후보별 재확인표 비율</h2>
+                    <span className="text-xs text-slate-500">전국 R1 vs R2 (%)</span>
+                  </div>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={recountSummary.candidateRatios} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} axisLine={false} tickLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={11} axisLine={false} tickLine={false} unit="%" />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: 12 }}
+                          formatter={(v: any, n: any) => [typeof v === 'number' ? v.toFixed(2) + '%' : v, n === 'r1' ? 'R1 (관내)' : 'R2 (관외사전)']}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => v === 'r1' ? 'R1 (관내)' : 'R2 (관외사전)'} />
+                        <Bar dataKey="r1" fill="#64748b" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="r2" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                          {recountSummary.candidateRatios.map((c, i) => <Cell key={i} fill={CANDIDATE_COLORS[c.name] ?? '#3b82f6'} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-3 grid grid-cols-5 gap-1 text-[10px]">
+                    {recountSummary.candidateRatios.map(c => (
+                      <div key={c.name} className="rounded bg-white/5 p-1 text-center">
+                        <div className="font-bold text-white">{c.name}</div>
+                        <div className="font-mono" style={{ color: kColor(c.k) }}>K={c.k.toFixed(3)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-white">지역별 K값 (이재명 기준)</h2>
+                    <span className="text-xs text-slate-500">K = R2 / R1</span>
+                  </div>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={recountSummary.provinceRows} layout="vertical" margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                        <XAxis type="number" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} domain={[0.8, 'auto']} />
+                        <YAxis dataKey="province" type="category" stroke="#94a3b8" fontSize={10} width={70} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: 12 }}
+                          formatter={(v: any) => [typeof v === 'number' ? v.toFixed(4) : v, 'K']}
+                        />
+                        <ReferenceLine x={1} stroke="#10b981" strokeDasharray="3 3" />
+                        <ReferenceLine x={1.5} stroke="#f43f5e" strokeDasharray="3 3" />
+                        <Bar dataKey="k_lee" radius={[0, 4, 4, 0]}>
+                          {recountSummary.provinceRows.map((p, i) => <Cell key={i} fill={kColor(p.k_lee)} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Chart Row 2: R1 vs R2 scatter */}
+            {recountSummary && (
+              <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white">R1(분류표 비율) vs R2(재확인표 비율)</h2>
+                  <span className="text-xs text-slate-500">253개 구시군 · 이재명 기준 (%)</span>
+                </div>
+                <div className="h-[400px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        type="number"
+                        dataKey="lee_r1"
+                        name="R1"
+                        stroke="#94a3b8"
+                        fontSize={11}
+                        unit="%"
+                        label={{ value: 'R1 (관내 득표율)', position: 'insideBottom', offset: -5, fill: '#64748b', fontSize: 11 }}
+                      />
+                      <YAxis
+                        type="number"
+                        dataKey="lee_r2"
+                        name="R2"
+                        stroke="#94a3b8"
+                        fontSize={11}
+                        unit="%"
+                        label={{ value: 'R2 (관외사전 득표율)', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }}
+                      />
+                      <ZAxis type="number" range={[40, 40]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: 12 }}
+                        cursor={{ strokeDasharray: '3 3' }}
+                        content={({ active, payload }: any) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const d = payload[0].payload;
+                          return (
+                            <div className="rounded-lg border border-white/10 bg-[#0f172a] p-2 text-xs">
+                              <div className="font-bold text-white">{d.province} {d.district}</div>
+                              <div className="text-slate-400">R1: {d.lee_r1.toFixed(2)}%</div>
+                              <div className="text-slate-400">R2: {d.lee_r2.toFixed(2)}%</div>
+                              <div className="font-bold" style={{ color: kColor(d.lee_k) }}>K: {d.lee_k.toFixed(4)}</div>
+                            </div>
+                          );
+                        }}
+                      />
+                      <ReferenceLine
+                        segment={[{ x: 0, y: 0 }, { x: 100, y: 100 }]}
+                        stroke="#10b981"
+                        strokeDasharray="4 4"
+                      />
+                      <Scatter name="구시군" data={recountSummary.districtRows}>
+                        {recountSummary.districtRows.map((d, i) => <Cell key={i} fill={kColor(d.lee_k)} />)}
+                      </Scatter>
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-4 text-[11px]">
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> K ≤ 1</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> 1 &lt; K &lt; 1.5</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> K ≥ 1.5</span>
+                  <span className="text-slate-500">· 녹색 점선: y=x (R1=R2)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Regional detail data table */}
+            {recountSummary && (
+              <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white">지역별 상세 데이터</h2>
+                  <span className="text-xs text-slate-500">17개 시도 집계 (이재명)</span>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#020617]/50">
+                  <table className="w-full text-left text-sm text-slate-300">
+                    <thead className="bg-slate-800/90 text-xs uppercase text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">시도</th>
+                        <th className="px-4 py-3 text-right font-semibold">R1 (관내)</th>
+                        <th className="px-4 py-3 text-right font-semibold">R2 (관외사전)</th>
+                        <th className="px-4 py-3 text-right font-semibold">Δ (R2−R1)</th>
+                        <th className="px-4 py-3 text-right font-bold text-rose-300">K (R2/R1)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {recountSummary.provinceRows.map((p, i) => {
+                        const delta = p.r2_lee - p.r1_lee;
+                        return (
+                          <tr key={i} className="transition-colors hover:bg-white/[0.03]">
+                            <td className="px-4 py-2 font-medium text-white">{p.province}</td>
+                            <td className="px-4 py-2 text-right font-mono">{p.r1_lee.toFixed(2)}%</td>
+                            <td className="px-4 py-2 text-right font-mono">{p.r2_lee.toFixed(2)}%</td>
+                            <td className={`px-4 py-2 text-right font-mono ${delta >= 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                              {delta >= 0 ? '+' : ''}{delta.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-2 text-right font-mono font-bold" style={{ color: kColor(p.k_lee) }}>
+                              {p.k_lee.toFixed(4)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur shadow-2xl">
               <div className="mb-6 flex items-center justify-between">
                 <div>
