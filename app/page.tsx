@@ -4,6 +4,7 @@ import rawElectionData from '../summaries/election_summary.json';
 import rawRegionalData from '../summaries/regional_summary.json';
 import k21RecountData from '../summaries/k21_recount.json';
 import k21RecountSummary from '../summaries/k21_recount_summary.json';
+import electionReports from '../summaries/election_reports.json';
 import ElectionDashboard from './components/ElectionDashboard';
 import type { ElectionRecord, RegionalRecord } from './types/election';
 
@@ -20,6 +21,7 @@ export default async function Home() {
       regionalData={rawRegionalData as unknown as Record<string, RegionalRecord>}
       recountData={k21RecountData}
       recountSummary={k21RecountSummary as any}
+      electionReports={electionReports as any}
       reports={{
         analysis: analysisReport,
         excelAudit: excelAudit,

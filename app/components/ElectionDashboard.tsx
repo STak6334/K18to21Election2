@@ -58,11 +58,38 @@ interface RecountSummary {
   national: { r1: number[]; r2: number[]; k: number[] };
 }
 
+interface ElectionReport {
+  title: string;
+  subtitle?: string | null;
+  date?: string | null;
+  overview: { label: string; value: any; note?: any }[];
+  candidates: {
+    name: string;
+    party: string;
+    votes: number;
+    pct: number;
+    winningProvinces: any;
+    result: string;
+  }[];
+  margin: { label: string; votes: number; pct: number; note?: any };
+  provinces: {
+    name: string;
+    turnout: number;
+    shares: Record<string, number>;
+    winner: string;
+    leadPct: number;
+  }[];
+  provinceCandidates: string[];
+  insights: { section: string; items: { label: string; value?: any; note?: any }[] }[];
+  regionalSummary?: { region: string; lee: number; kim: number; winner: string; leadPct: number }[] | null;
+}
+
 interface Props {
   electionData: ElectionRecord[];
   regionalData: Record<string, RegionalRecord>;
   recountData?: any[];
   recountSummary?: RecountSummary;
+  electionReports?: Record<string, ElectionReport>;
   reports: {
     analysis: string;
     excelAudit: string;
@@ -133,9 +160,10 @@ const ELECTION_LABELS: Record<string, string> = {
 
 const ELECTIONS = ['18th', '19th', '20th', '21st'] as const;
 
-export default function ElectionDashboard({ electionData, regionalData, reports, recountData, recountSummary }: Props) {
+export default function ElectionDashboard({ electionData, regionalData, reports, recountData, recountSummary, electionReports }: Props) {
   const [view, setView] = useState<View>('insight');
   const [selectedElection, setSelectedElection] = useState<(typeof ELECTIONS)[number]>('21st');
+  const [reportElection, setReportElection] = useState<(typeof ELECTIONS)[number]>('21st');
 
   const current = electionData.find((d) => d.Election === selectedElection) ?? electionData[0];
   
@@ -330,25 +358,31 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
 
         {/* Report View */}
         {view === 'report' && (
-          <div className="mx-auto max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="rounded-[40px] border border-white/5 bg-slate-900/40 p-8 shadow-2xl md:p-12">
-              <div className="prose prose-invert prose-slate max-w-none">
-                <div 
-                  className="space-y-8 [&>h1]:text-4xl [&>h1]:font-black [&>h1]:tracking-tight [&>h1]:text-white 
-                             [&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-blue-400 [&>p]:text-slate-400 [&>p]:leading-relaxed
-                             [&>img]:rounded-3xl [&>img]:border [&>img]:border-white/10 [&>img]:shadow-2xl"
-                  dangerouslySetInnerHTML={{ 
-                    __html: processMarkdown(reports.analysis)
-                      .replace(/# (.*)\n/, '<h1 class="mb-4">$1</h1>')
-                      .replace(/## (.*)\n/g, '<h2 class="mt-12 mb-6 border-b border-white/5 pb-2">$2</h2>')
-                      .replace(/### (.*)\n/g, '<h3 class="mt-8 mb-4 text-xl font-semibold text-slate-200">$1</h3>')
-                      .replace(/\n\n/g, '</p><p>')
-                      .replace(/^(.+)/gm, (match) => match.startsWith('<h') || match.startsWith('<p') || match.startsWith('![') ? match : `<p>${match}</p>`)
-                      .replace(/!\[(.*?)\]\((.*?)\)/g, '<div class="my-10"><img src="$2" alt="$1" style="width: 100%; height: auto;" /><p class="mt-4 text-center text-xs italic text-slate-500">$1</p></div>')
-                  }} 
-                />
-              </div>
+          <div className="mx-auto max-w-5xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Election selector */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {ELECTIONS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setReportElection(e)}
+                  className={`rounded-2xl px-5 py-2.5 text-sm font-bold uppercase tracking-wide transition-all ${
+                    reportElection === e
+                      ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-400/40'
+                      : 'bg-white/5 text-slate-400 ring-1 ring-white/5 hover:bg-white/10 hover:text-slate-200'
+                  }`}
+                >
+                  {ELECTION_LABELS[e]}
+                </button>
+              ))}
             </div>
+
+            {electionReports && electionReports[reportElection] ? (
+              <ElectionReportView report={electionReports[reportElection]} />
+            ) : (
+              <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-8 text-center text-sm text-slate-500">
+                No structured report available for this election.
+              </div>
+            )}
           </div>
         )}
 
@@ -655,6 +689,212 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function fmtNum(v: any): string {
+  if (v === null || v === undefined || v === '') return '-';
+  if (typeof v === 'number') return v.toLocaleString();
+  return String(v);
+}
+
+function fmtPct(v: any, digits = 2): string {
+  if (v === null || v === undefined || v === '') return '-';
+  if (typeof v === 'number') return (v * 100).toFixed(digits) + '%';
+  return String(v);
+}
+
+function isFraction(v: any): boolean {
+  return typeof v === 'number' && v >= 0 && v <= 1;
+}
+
+function ElectionReportView({ report }: { report: ElectionReport }) {
+  const winner = report.candidates[0];
+  const runnerUp = report.candidates[1];
+  const chartData = report.candidates.map((c) => ({
+    name: c.name,
+    pct: Math.round(c.pct * 10000) / 100,
+    votes: c.votes,
+    color: getPartyColor(`${c.name} (${c.party})`),
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* Header card */}
+      <div className="rounded-[32px] border border-white/5 bg-gradient-to-br from-slate-900/60 to-slate-900/30 p-8 shadow-2xl backdrop-blur">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-black tracking-tight text-white md:text-4xl">{report.title}</h1>
+          {report.subtitle && (
+            <p className="text-sm font-medium text-slate-400">{report.subtitle}</p>
+          )}
+          {report.date && (
+            <p className="text-xs text-slate-500">{report.date}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Overview KPIs */}
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+        <h2 className="mb-4 text-lg font-bold text-blue-400">1. 선거 개요 (Election Overview)</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          {report.overview.map((o, i) => (
+            <div key={i} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{o.label}</p>
+              <p className="mt-1 text-xl font-bold text-white">
+                {isFraction(o.value) ? fmtPct(o.value) : fmtNum(o.value)}
+              </p>
+              {o.note && <p className="mt-1 text-[10px] text-slate-500 leading-tight">{String(o.note)}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Candidates */}
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+        <h2 className="mb-4 text-lg font-bold text-blue-400">2. 후보별 개표 결과 (Candidate Results)</h2>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#020617]/50">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-800/90 text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-3 py-2">후보자</th>
+                  <th className="px-3 py-2">정당</th>
+                  <th className="px-3 py-2 text-right">득표수</th>
+                  <th className="px-3 py-2 text-right">득표율</th>
+                  <th className="px-3 py-2 text-center">결과</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {report.candidates.map((c, i) => {
+                  const color = getPartyColor(`${c.name} (${c.party})`);
+                  return (
+                    <tr key={i} className="hover:bg-white/[0.03]">
+                      <td className="px-3 py-2 font-bold text-white">{c.name}</td>
+                      <td className="px-3 py-2" style={{ color }}>{c.party}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmtNum(c.votes)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold">{fmtPct(c.pct)}</td>
+                      <td className="px-3 py-2 text-center text-xs">{c.result}</td>
+                    </tr>
+                  );
+                })}
+                {report.margin && (
+                  <tr className="bg-white/[0.02]">
+                    <td className="px-3 py-2 text-xs italic text-slate-400" colSpan={2}>
+                      {report.margin.label ?? '표차'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-amber-300">{fmtNum(report.margin.votes)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-amber-300">{fmtPct(report.margin.pct)}</td>
+                    <td className="px-3 py-2 text-center text-[10px] text-slate-500">{report.margin.note ?? ''}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
+                <XAxis type="number" hide domain={[0, 'auto']} />
+                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} width={70} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: 12 }}
+                  formatter={(v: any) => [typeof v === 'number' ? v.toFixed(2) + '%' : v, '득표율']}
+                  cursor={{ fill: 'transparent' }}
+                />
+                <Bar dataKey="pct" radius={[0, 8, 8, 0]} barSize={22}>
+                  {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {winner && runnerUp && (
+          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-slate-400">
+            <span className="font-bold text-blue-300">{winner.name}</span> 당선 ·{' '}
+            <span className="font-mono">{fmtPct(winner.pct)}</span> vs{' '}
+            <span className="font-bold text-rose-300">{runnerUp.name}</span>{' '}
+            <span className="font-mono">{fmtPct(runnerUp.pct)}</span>
+            {report.margin?.pct && <> · 표차 {fmtPct(report.margin.pct)}</>}
+          </div>
+        )}
+      </div>
+
+      {/* Provinces */}
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+        <h2 className="mb-4 text-lg font-bold text-blue-400">3. 시도별 개표 결과 (Results by Province)</h2>
+        <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#020617]/50">
+          <table className="w-full text-left text-sm text-slate-300">
+            <thead className="bg-slate-800/90 text-xs uppercase text-slate-400">
+              <tr>
+                <th className="px-3 py-2">시도명</th>
+                <th className="px-3 py-2 text-right">투표율</th>
+                {report.provinceCandidates.map((n) => (
+                  <th key={n} className="px-3 py-2 text-right">{n}</th>
+                ))}
+                <th className="px-3 py-2">우세</th>
+                <th className="px-3 py-2 text-right">표차 (%p)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {report.provinces.map((p, i) => (
+                <tr key={i} className="hover:bg-white/[0.03]">
+                  <td className="px-3 py-1.5 font-medium text-white">{p.name}</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-xs">{fmtPct(p.turnout)}</td>
+                  {report.provinceCandidates.map((n) => (
+                    <td key={n} className="px-3 py-1.5 text-right font-mono text-xs">{fmtPct(p.shares?.[n])}</td>
+                  ))}
+                  <td className="px-3 py-1.5 text-xs" style={{ color: getPartyColor(p.winner) }}>{p.winner}</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-xs text-amber-300">{fmtPct(p.leadPct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Regional summary (21st only) */}
+      {report.regionalSummary && report.regionalSummary.length > 0 && (
+        <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+          <h2 className="mb-4 text-lg font-bold text-blue-400">권역별 요약 (Regional Summary)</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+            {report.regionalSummary.map((r, i) => (
+              <div key={i} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                <p className="text-[11px] font-bold text-slate-400">{r.region}</p>
+                <p className="mt-2 text-sm font-mono" style={{ color: DEMOCRATIC }}>이재명 {fmtPct(r.lee)}</p>
+                <p className="text-sm font-mono" style={{ color: CONSERVATIVE }}>김문수 {fmtPct(r.kim)}</p>
+                <p className="mt-2 text-[10px] text-slate-500">우세 {r.winner} (+{fmtPct(r.leadPct)})</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Insights */}
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
+        <h2 className="mb-4 text-lg font-bold text-blue-400">4. 주요 분석 (Key Insights)</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {report.insights.map((sec, i) => (
+            <div key={i} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+              <h3 className="mb-3 text-sm font-bold text-rose-300">■ {sec.section}</h3>
+              <ul className="space-y-2 text-xs">
+                {sec.items.map((it, j) => (
+                  <li key={j} className="flex items-start justify-between gap-2 border-b border-white/5 pb-1.5 last:border-0">
+                    <span className="text-slate-400">{it.label}</span>
+                    <span className="text-right font-mono text-slate-200">
+                      {isFraction(it.value) ? fmtPct(it.value) : fmtNum(it.value)}
+                      {it.note !== null && it.note !== undefined && it.note !== '' && (
+                        <span className="ml-1 text-[10px] text-slate-500">
+                          {isFraction(it.note) ? `(${fmtPct(it.note)})` : `(${it.note})`}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
