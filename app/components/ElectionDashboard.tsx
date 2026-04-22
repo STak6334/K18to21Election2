@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -18,21 +18,29 @@ import {
   Scatter,
   ZAxis,
 } from 'recharts';
-import { 
-  BarChart3, 
-  FileText, 
-  ShieldCheck, 
-  TrendingUp, 
-  Users, 
-  MapPin, 
+import {
+  BarChart3,
+  FileText,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+  MapPin,
   Activity,
   Download,
   Search,
   ChevronRight,
-  Info
+  Info,
+  BookOpen,
+  Clock
 } from 'lucide-react';
 
 import type { ElectionRecord, RegionalRecord } from '../types/election';
+import ChartContainer from './ChartContainer';
+import MethodologyPanel from './MethodologyPanel';
+import SwingAnalysis from './SwingAnalysis';
+import CounterfactualWidget from './CounterfactualWidget';
+import AnomalyFlags from './AnomalyFlags';
+import { LAST_PIPELINE_RUN, METRIC_PROVENANCE, sourceById } from '../lib/methodology';
 
 interface RecountSummary {
   candidateRatios: { name: string; party: string; r1: number; r2: number; k: number }[];
@@ -111,7 +119,7 @@ function kColor(k: number): string {
   return '#10b981';
 }
 
-type View = 'insight' | 'report' | 'audit' | 'recount';
+type View = 'insight' | 'report' | 'audit' | 'recount' | 'methodology';
 
 const CONSERVATIVE = '#f43f5e'; // Rose 500
 const DEMOCRATIC = '#3b82f6';    // Blue 500
@@ -259,6 +267,15 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
             >
               <Search className="h-4 w-4" /> 재확인표분석
             </button>
+            <button
+              onClick={() => setView('methodology')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                view === 'methodology' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+              }`}
+              aria-label="Open methodology panel"
+            >
+              <BookOpen className="h-4 w-4" /> Methodology
+            </button>
           </nav>
         </div>
       </header>
@@ -267,6 +284,8 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
         {/* Insight View */}
         {view === 'insight' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <RefreshBanner onOpenMethodology={() => setView('methodology')} />
+
             {/* Election Selectors */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               {ELECTIONS.map((e) => (
@@ -274,8 +293,8 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
                   key={e}
                   onClick={() => setSelectedElection(e)}
                   className={`group relative overflow-hidden rounded-2xl px-6 py-3 transition-all ${
-                    selectedElection === e 
-                      ? 'bg-white/10 text-white ring-2 ring-blue-500/50' 
+                    selectedElection === e
+                      ? 'bg-white/10 text-white ring-2 ring-blue-500/50'
                       : 'bg-white/5 text-slate-500 ring-1 ring-white/5 hover:bg-white/10 hover:text-slate-300'
                   }`}
                 >
@@ -289,40 +308,61 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
               ))}
             </div>
 
-            {/* Quick Stats Grid */}
+            {/* Quick Stats Grid (KPIs with provenance tooltips) */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { label: 'Total Votes', value: totalVotes.toLocaleString(), icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-                { label: 'Turnout Rate', value: `${turnoutRate.toFixed(1)}%`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
-                { label: 'Winner', value: sortedCandidates[0].name, icon: Search, color: 'text-rose-400', bg: 'bg-rose-400/10' },
-                { label: 'Margin', value: (sortedCandidates[0].votes - sortedCandidates[1].votes).toLocaleString(), icon: Info, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+                { label: 'Total Votes', value: totalVotes.toLocaleString(), icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/10', metricId: 'totalVotes', defHref: '#metric-margin' },
+                { label: 'Turnout Rate', value: `${turnoutRate.toFixed(1)}%`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-400/10', metricId: 'turnout', defHref: '#metric-turnout' },
+                { label: 'Winner', value: sortedCandidates[0].name, icon: Search, color: 'text-rose-400', bg: 'bg-rose-400/10', metricId: 'winner', defHref: '#metric-margin' },
+                { label: 'Margin (votes)', value: (sortedCandidates[0].votes - sortedCandidates[1].votes).toLocaleString(), icon: Info, color: 'text-amber-400', bg: 'bg-amber-400/10', metricId: 'margin', defHref: '#metric-margin' },
               ].map((stat, i) => (
-                <div key={i} className="group relative overflow-hidden rounded-3xl border border-white/5 bg-slate-900/40 p-6 transition-all hover:bg-slate-900/60">
-                   <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${stat.bg} ${stat.color}`}>
-                     <stat.icon className="h-5 w-5" />
-                   </div>
-                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                   <p className="mt-1 text-2xl font-bold text-white">{stat.value}</p>
-                </div>
+                <KpiCard
+                  key={i}
+                  label={stat.label}
+                  value={stat.value}
+                  icon={stat.icon}
+                  color={stat.color}
+                  bg={stat.bg}
+                  metricId={stat.metricId}
+                  defHref={stat.defHref}
+                  onOpenMethodology={() => setView('methodology')}
+                />
               ))}
             </div>
 
             {/* Charts Section */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Vote Count Bar Chart */}
-              <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
-                <div className="mb-6 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-white">Candidate Performance</h2>
-                  <div className="h-1.5 w-12 rounded-full bg-blue-500/20" />
-                </div>
+              <ChartContainer
+                title="Candidate Performance"
+                description={`Vote totals for each candidate in the ${ELECTION_LABELS[selectedElection]} election, sorted by votes received.`}
+                data={sortedCandidates.map((c) => ({
+                  name: c.name,
+                  party: c.party,
+                  votes: c.votes,
+                  pct: c.pct.toFixed(2),
+                }))}
+                columns={[
+                  { key: 'name', label: 'Candidate' },
+                  { key: 'party', label: 'Party' },
+                  { key: 'votes', label: 'Votes', format: (v) => Number(v).toLocaleString() },
+                  { key: 'pct', label: 'Share %' },
+                ]}
+                provenanceIds={METRIC_PROVENANCE.totalVotes?.filter((s) => s.endsWith(selectedElection.replace(/[a-z]/g, '')) || s === `nec_${selectedElection}`) ?? [`nec_${selectedElection}`]}
+                metricDefHref="#metric-margin"
+                csvFilename={`candidate_performance_${selectedElection}.csv`}
+              >
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sortedCandidates} layout="vertical" margin={{ left: 20 }}>
                       <XAxis type="number" hide />
                       <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} width={80} axisLine={false} tickLine={false} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                        cursor={{ fill: 'transparent' }} 
+                        cursor={{ fill: 'transparent' }}
+                        formatter={((v: any, _n: any, entry: any) => [
+                          `${Number(v).toLocaleString()} votes (${entry?.payload?.pct?.toFixed(2)}%)`,
+                          'Votes',
+                        ]) as any}
                       />
                       <Bar dataKey="votes" radius={[0, 8, 8, 0]} barSize={24}>
                         {sortedCandidates.map((c, i) => <Cell key={i} fill={c.color} />)}
@@ -330,29 +370,51 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </ChartContainer>
 
-              {/* Regional Chart */}
-              <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
-                <div className="mb-6 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-white">Regional Support</h2>
-                  <div className="h-1.5 w-12 rounded-full bg-rose-500/20" />
-                </div>
+              <ChartContainer
+                title="Regional Support"
+                description="Conservative vs Democratic two-block vote shares by region (17 시도), stacked. Values in percent."
+                data={regionalChartData.map((r) => ({
+                  region: r.region,
+                  conservative_pct: r.Conservative,
+                  democratic_pct: r.Democratic,
+                }))}
+                columns={[
+                  { key: 'region', label: 'Region' },
+                  { key: 'conservative_pct', label: 'Conservative %', format: (v) => Number(v).toFixed(2) },
+                  { key: 'democratic_pct', label: 'Democratic %', format: (v) => Number(v).toFixed(2) },
+                ]}
+                provenanceIds={[`nec_${selectedElection}`]}
+                metricDefHref="#metric-swing"
+                csvFilename={`regional_support_${selectedElection}.csv`}
+              >
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={regionalChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                       <XAxis dataKey="region" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }} />
+                      <YAxis stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} unit="%" />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
+                        formatter={((v: any, n: any) => [`${Number(v).toFixed(2)}%`, n]) as any}
+                      />
                       <Legend />
                       <Bar dataKey="Conservative" fill={CONSERVATIVE} radius={[4, 4, 0, 0]} stackId="a" />
                       <Bar dataKey="Democratic" fill={DEMOCRATIC} radius={[4, 4, 0, 0]} stackId="a" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
+              </ChartContainer>
             </div>
+
+            {/* Decision-grade analytics */}
+            <SwingAnalysis regional={regionalData} />
+            <CounterfactualWidget
+              election={current}
+              regional={regionalData}
+              electionKey={selectedElection}
+            />
           </div>
         )}
 
@@ -433,9 +495,15 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
           </div>
         )}
 
+        {/* Methodology View */}
+        {view === 'methodology' && <MethodologyPanel />}
+
         {/* Recount View */}
         {view === 'recount' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {recountData && recountData.length > 0 && (
+              <AnomalyFlags recountRows={recountData as any} />
+            )}
             {/* National KPI Row */}
             {recountSummary && (
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -689,6 +757,99 @@ export default function ElectionDashboard({ electionData, regionalData, reports,
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function RefreshBanner({ onOpenMethodology }: { onOpenMethodology: () => void }) {
+  const run = LAST_PIPELINE_RUN;
+  const ts = new Date(run.completedAt).toISOString().replace('T', ' ').slice(0, 19);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-900/40 px-5 py-3 text-xs"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
+          <Clock className="h-4 w-4" aria-hidden />
+        </span>
+        <div>
+          <p className="font-semibold text-slate-300">
+            Last refresh <span className="font-mono text-white">{ts} UTC</span>
+          </p>
+          <p className="text-slate-500">
+            Pipeline run ID <span className="font-mono">{run.runId}</span> · dedup dropped{' '}
+            {run.dedupDroppedRows.toLocaleString()} rows
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenMethodology}
+        className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-semibold text-slate-300 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
+        <BookOpen className="h-3.5 w-3.5" aria-hidden />
+        How metrics are computed
+      </button>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+  bg,
+  metricId,
+  defHref,
+  onOpenMethodology,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bg: string;
+  metricId: string;
+  defHref: string;
+  onOpenMethodology: () => void;
+}) {
+  const sources = (METRIC_PROVENANCE[metricId] ?? []).map(sourceById).filter(Boolean);
+  const provTitle = sources
+    .map((s) => `${s!.name} · ${s!.file} · v${s!.version} · updated ${s!.lastModified}`)
+    .join('\n');
+
+  return (
+    <div className="group relative overflow-hidden rounded-3xl border border-white/5 bg-slate-900/40 p-6 transition-all hover:bg-slate-900/60">
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${bg} ${color}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+      <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500">
+        <span
+          className="cursor-help font-mono"
+          title={provTitle || 'No source recorded'}
+          aria-label={`Source: ${provTitle}`}
+        >
+          Source: {sources.length} dataset{sources.length === 1 ? '' : 's'}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            onOpenMethodology();
+            setTimeout(() => {
+              const el = document.querySelector(defHref);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 50);
+          }}
+          className="text-slate-400 hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+          aria-label={`How ${label} is computed`}
+        >
+          How?
+        </button>
+      </div>
     </div>
   );
 }
