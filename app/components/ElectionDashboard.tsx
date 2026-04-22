@@ -1070,6 +1070,19 @@ function ElectionReportView({ report }: { report: ElectionReport }) {
     color: getPartyColor(`${c.name} (${c.party})`),
   }));
 
+  const leadPcts = report.provinces.map((p) => (typeof p.leadPct === 'number' ? p.leadPct : 0));
+  const turnoutValues = report.provinces.map((p) => (typeof p.turnout === 'number' ? p.turnout : 0));
+  const turnoutMax = turnoutValues.length ? Math.max(...turnoutValues) : 0;
+  const turnoutMin = turnoutValues.length ? Math.min(...turnoutValues) : 0;
+  const turnoutSpread = turnoutMax - turnoutMin;
+  const averageRegionalLead = leadPcts.length
+    ? leadPcts.reduce((sum, value) => sum + value, 0) / leadPcts.length
+    : 0;
+  const competitivenessIndex = report.margin?.pct ? Math.max(0, 1 - report.margin.pct) : 0;
+  const highlightedInsightItems = report.insights
+    .flatMap((section) => section.items.map((item) => ({ section: section.section, ...item })))
+    .slice(0, 6);
+
   return (
     <div className="space-y-6">
       {/* Header card */}
@@ -1223,6 +1236,43 @@ function ElectionReportView({ report }: { report: ElectionReport }) {
       {/* Insights */}
       <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-6 backdrop-blur">
         <h2 className="mb-4 text-lg font-bold text-blue-400">4. 주요 분석 (Key Insights)</h2>
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-[#020617]/50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Competitiveness Index</p>
+            <p className="mt-1 text-xl font-bold text-white">{(competitivenessIndex * 100).toFixed(1)}</p>
+            <p className="text-[11px] text-slate-500">1 - margin (%p), higher means tighter race</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-[#020617]/50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Turnout Dispersion</p>
+            <p className="mt-1 text-xl font-bold text-white">{fmtPct(turnoutSpread)}</p>
+            <p className="text-[11px] text-slate-500">Max-min turnout spread across provinces</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-[#020617]/50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Avg Regional Lead</p>
+            <p className="mt-1 text-xl font-bold text-white">{fmtPct(averageRegionalLead)}</p>
+            <p className="text-[11px] text-slate-500">Mean winner lead by province (%p)</p>
+          </div>
+        </div>
+
+        {highlightedInsightItems.length > 0 && (
+          <div className="mb-4 rounded-xl border border-white/10 bg-[#020617]/40 p-4">
+            <h3 className="mb-2 text-sm font-semibold text-amber-300">Top signal extract</h3>
+            <ul className="grid grid-cols-1 gap-2 text-xs md:grid-cols-2">
+              {highlightedInsightItems.map((it, idx) => (
+                <li key={`${it.section}-${idx}`} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                  <span className="mr-2 text-slate-500">[{it.section}]</span>
+                  <span className="text-slate-200">{it.label}</span>
+                  {it.value !== undefined && (
+                    <span className="ml-2 font-mono text-slate-400">
+                      {isFraction(it.value) ? fmtPct(it.value) : fmtNum(it.value)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {report.insights.map((sec, i) => (
             <div key={i} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
