@@ -85,3 +85,21 @@ vercel --prod --scope tcgyvers-projects
 ## Troubleshooting
 - If npm install fails due registry restrictions, run steps in CI or a machine with npm registry access.
 - If Vercel scope mismatch occurs, run `vercel teams ls` and verify active team is `tcgyvers-projects`.
+
+## PR #4 conflict resolution helper
+If GitHub shows merge conflicts on PR #4, run:
+
+```bash
+./scripts/resolve_pr4_conflict.sh origin main
+```
+
+This helper uses a deterministic strategy:
+- keeps PR UI/feature files (`ElectionDashboard.tsx`, `layout.tsx`, deploy guide),
+- keeps `main` for `package.json` (to avoid dependency-policy merges),
+- keeps `main` for `app/page.tsx` if it conflicts.
+
+Then push the branch:
+
+```bash
+git push
+```
