@@ -20,11 +20,13 @@ The files are organized into the following directories:
 - **Original Data**: `K18to21charts.xlsx`, `18to21Kelection.pptx`
 - **Corrected Data**: `K18to21charts_corrected.xlsx` (Fixed visibility issues and unhidden columns).
 - **Final Report**: `election_analysis_report.md` provides a detailed breakdown of trends across the four election cycles.
+- **21st Election Deep Dive**: `k21_election_analysis.md` provides a focused statistical analysis for the 21st election (vote structure, regional split, R1/R2/K indicators, district-level fit checks).
 - **New Presentation**: `18__21.pptx` and `18__21.pdf` summarize the findings in a professional format.
 
 ### Audit Reports
 - **Excel Audit**: `excel_audit_report.md` details the checks performed on the spreadsheet.
 - **Presentation Audit**: `presentation_audit_report.md` identifies formatting and layout improvements for the original presentation.
+- **21st Analysis Snapshot**: `k21_statistical_analysis.json` stores derived machine-readable metrics used in the deep-dive report.
 
 ### Visualizations
 - `voter_turnout.png`: Trends in voter engagement from the 18th to 21st elections.

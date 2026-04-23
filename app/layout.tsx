@@ -19,81 +19,21 @@ const DESCRIPTION =
   "18대~21대 한국 대통령 선거 결과 분석 대시보드 (2012–2025) · methodology, swing, counterfactuals, anomaly detection, bilingual.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: TITLE,
-  description: DESCRIPTION,
-  applicationName: "Electoral Insights Hub",
-  authors: [{ name: "Electoral Insights" }],
-  keywords: [
-    "Korea",
-    "presidential election",
-    "대통령선거",
-    "18대",
-    "19대",
-    "20대",
-    "21대",
-    "swing analysis",
-    "counterfactual",
-    "K-value",
-    "재확인표",
-    "NEC",
-    "중앙선거관리위원회",
-  ],
-  alternates: {
-    canonical: "/",
-    languages: {
-      ko: "/?lang=ko",
-      en: "/?lang=en",
-    },
-  },
+  title: "한국 대통령 선거 대시보드 | Korean Presidential Election Dashboard",
+  description: "18대~21대 한국 대통령 선거 결과 분석 대시보드 (2012–2025)",
   openGraph: {
+    title: "K18–K21 Korean Presidential Election Dashboard",
+    description:
+      "Interactive analytics dashboard for 18th–21st Korean presidential elections.",
     type: "website",
     locale: "ko_KR",
-    alternateLocale: ["en_US"],
-    url: SITE_URL,
-    siteName: "Electoral Insights Hub",
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [
-      {
-        url: "/images/major_party_vote_share.png",
-        width: 1200,
-        height: 630,
-        alt: "Korean Presidential Election vote share (18th–21st)",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: TITLE,
-    description: DESCRIPTION,
-    images: ["/images/major_party_vote_share.png"],
+    title: "K18–K21 Korean Presidential Election Dashboard",
+    description:
+      "Election analytics, regional swings, audit scorecards, and reproducible exports.",
   },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true },
-  },
-};
-
-const JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "Dataset",
-  name: "Korean Presidential Elections 18th–21st (2012–2025)",
-  description: DESCRIPTION,
-  url: SITE_URL,
-  creator: { "@type": "Organization", name: "Electoral Insights Hub" },
-  spatialCoverage: { "@type": "Country", name: "Republic of Korea" },
-  temporalCoverage: "2012/2025",
-  license: "https://creativecommons.org/licenses/by/4.0/",
-  isBasedOn: "https://www.nec.go.kr",
-  variableMeasured: [
-    "Total votes",
-    "Turnout rate",
-    "Two-block vote share",
-    "K-value (R2/R1)",
-    "Regional swing",
-  ],
 };
 
 export default function RootLayout({
@@ -101,6 +41,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: "Korean Presidential Elections 18th–21st Dashboard",
+    description:
+      "Dashboard with analytics and audit summaries for Korean presidential elections from 2012 to 2025.",
+    inLanguage: ["ko", "en"],
+  };
+
   return (
     <html
       lang="ko"
@@ -109,9 +58,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        <LanguageProvider>{children}</LanguageProvider>
+        {children}
       </body>
     </html>
   );
