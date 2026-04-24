@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import LanguageProvider from "./components/LanguageProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -11,6 +12,11 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+const SITE_URL = "https://k18to21-election2.vercel.app";
+const TITLE = "한국 대통령 선거 대시보드 | Korean Presidential Election Dashboard";
+const DESCRIPTION =
+  "18대~21대 한국 대통령 선거 결과 분석 대시보드 (2012–2025) · methodology, swing, counterfactuals, anomaly detection, bilingual.";
 
 export const metadata: Metadata = {
   title: "한국 대통령 선거 대시보드 | Korean Presidential Election Dashboard",
